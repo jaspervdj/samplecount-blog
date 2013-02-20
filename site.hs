@@ -1,74 +1,99 @@
---------------------------------------------------------------------------------
 {-# LANGUAGE OverloadedStrings #-}
 import           Control.Applicative ((<$>))
 import           Data.Char
 import           Data.Monoid         ((<>), mappend)
 import           Hakyll
 
---------------------------------------------------------------------------------
-main :: IO ()
-main = hakyll $ do
-    match "images/*" $ do
-        route   idRoute
-        compile copyFileCompiler
+blogRoot = "http://blog.samplecount.com"
 
-    match "css/*" $ do
-        route   idRoute
-        compile compressCssCompiler
+myFeedConfiguration :: FeedConfiguration
+myFeedConfiguration = FeedConfiguration
+  { feedTitle       = "Samplecount Blog"
+  , feedDescription = "This is the feed for Samplecount's company blog - Posts about sound and programming"
+  , feedAuthorName  = "Samplecount"
+  , feedAuthorEmail = "info@samplecount.com"
+  , feedRoot        = blogRoot
+  }
 
-    -- match (fromList ["about.rst", "contact.markdown"]) $ do
-    --     route   $ setExtension "html"
-    --     compile $ pandocCompiler
-    --         >>= loadAndApplyTemplate "templates/default.html" defaultContext
-    --         >>= relativizeUrls
+matchPosts template tag =
+  match "posts/*" $ version tag $ do
+    route $ setExtension "html"
+    -- let localCtx = postCtx `mappend` field "postid" (\_ -> concatMap (show.ord) . show <$> getUnderlying)
+    compile $ pandocCompiler
+      >>= loadAndApplyTemplate template postCtx
+      >>= saveSnapshot "content"
+      >>= loadAndApplyTemplate "templates/default.html" postCtx
+      >>= relativizeUrls
 
-    match "posts/*" $ do
-        route $ setExtension "html"
-        let localCtx = postCtx `mappend` field "postid" (\_ -> concatMap (show.ord) . show <$> getUnderlying)
-        compile $ pandocCompiler
-            >>= loadAndApplyTemplate "templates/post.html"    localCtx
-            >>= saveSnapshot "content"
-            >>= loadAndApplyTemplate "templates/default.html" postCtx
-            >>= relativizeUrls
-
-    create ["archive.html"] $ do
-        route idRoute
-        compile $ do
-            let archiveCtx =
-                    field "posts" (\_ -> postList recentFirst) `mappend`
-                    constField "title" "Archives"              `mappend`
-                    defaultContext
-
-            makeItem ""
-                >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
-                >>= loadAndApplyTemplate "templates/default.html" archiveCtx
-                >>= relativizeUrls
-
-    match "index.html" $ do
-        route idRoute
-        compile $ do
-            -- let indexCtx = field "posts" $ \_ -> postList (take 3 . recentFirst)
-            let indexCtx = field "posts" $ const $ concatMap itemBody . take 10 . recentFirst <$> loadAllSnapshots "posts/*" "content"
-
-            getResourceBody
-                >>= applyAsTemplate indexCtx
-                >>= loadAndApplyTemplate "templates/default.html" postCtx
-                >>= relativizeUrls
-
-    match "templates/*" $ compile templateCompiler
-
-
---------------------------------------------------------------------------------
 postCtx :: Context String
 postCtx =
-    dateField "date" "%B %e, %Y" `mappend`
-    defaultContext
+       dateField "date" "%B %e, %Y"
+    <> dateField "postid" "%Y%m%d%H%M%S"
+    <> defaultContext
 
+postList :: Compiler [Item String]
+postList = recentFirst <$> loadAllSnapshots "posts/*" "content"
 
---------------------------------------------------------------------------------
-postList :: ([Item String] -> [Item String]) -> Compiler String
-postList sortFilter = do
-    posts   <- sortFilter <$> loadAll "posts/*"
-    itemTpl <- loadBody "templates/post-item.html"
-    list    <- applyTemplateList itemTpl postCtx posts
-    return list
+postItemList :: Compiler String
+postItemList = do
+  posts   <- recentFirst <$> loadAll "posts/*"
+  itemTpl <- loadBody "templates/post-item.html"
+  list    <- applyTemplateList itemTpl postCtx posts
+  return list
+
+main :: IO ()
+main = hakyll $ do
+  match "images/*" $ do
+    route   idRoute
+    compile copyFileCompiler
+
+  match "css/*" $ do
+    route   idRoute
+    compile compressCssCompiler
+
+  -- match (fromList ["about.rst", "contact.markdown"]) $ do
+  --     route   $ setExtension "html"
+  --     compile $ pandocCompiler
+  --         >>= loadAndApplyTemplate "templates/default.html" defaultContext
+  --         >>= relativizeUrls
+
+  match "posts/*" $ do
+    route $ setExtension "html"
+    -- let localCtx = postCtx `mappend` field "postid" (\_ -> concatMap (show.ord) . show <$> getUnderlying)
+    compile $ pandocCompiler
+      >>= loadAndApplyTemplate "templates/post.html" postCtx
+      >>= saveSnapshot "content"
+      >>= loadAndApplyTemplate "templates/default.html" postCtx
+      >>= relativizeUrls
+
+  create ["archive/index.html"] $ do
+    route idRoute
+    compile $ do
+      let archiveCtx =
+               field "post-items" (const $ postItemList)
+            <> constField "title" "Archives"
+            <> defaultContext
+
+      makeItem ""
+        >>= loadAndApplyTemplate "templates/archive.html" archiveCtx
+        >>= loadAndApplyTemplate "templates/default.html" archiveCtx
+        >>= relativizeUrls
+
+  create ["atom.xml"] $ do
+    route idRoute
+    compile $ do
+      let feedCtx = postCtx `mappend` bodyField "description"
+      posts <- take 10 <$> postList
+      renderAtom myFeedConfiguration feedCtx posts
+
+  match "index.html" $ do
+      route idRoute
+      compile $ do
+          -- let indexCtx = field "posts" $ \_ -> postList (take 3 . recentFirst)
+          let indexCtx = field "posts" $ const $ concatMap itemBody . take 10 <$> postList
+          getResourceBody
+              >>= applyAsTemplate indexCtx
+              >>= loadAndApplyTemplate "templates/default.html" postCtx
+              >>= relativizeUrls
+
+  match "templates/*" $ compile templateCompiler
