@@ -43,13 +43,17 @@ postItemList = do
 
 main :: IO ()
 main = hakyll $ do
+  match "css/*" $ do
+    route idRoute
+    compile compressCssCompiler
+
   match "images/*" $ do
-    route   idRoute
+    route idRoute
     compile copyFileCompiler
 
-  match "css/*" $ do
-    route   idRoute
-    compile compressCssCompiler
+  match "js/**" $ do
+    route idRoute
+    compile copyFileCompiler
 
   -- match (fromList ["about.rst", "contact.markdown"]) $ do
   --     route   $ setExtension "html"
