@@ -16,15 +16,20 @@ myFeedConfiguration = FeedConfiguration
 postCtx :: Context String
 postCtx =
        dateField "date" "%B %e, %Y"
-    <> dateField "postid" "%Y%m%d%H%M%S"
+    <> dateField "postId" "%Y%m%d"
+    <> urlField  "postUrl"
     <> defaultContext
 
-postList :: Compiler [Item String]
-postList = recentFirst <$> loadAllSnapshots "posts/*" "content"
+postList :: Compiler String
+postList = do
+  posts <- recentFirst <$> loadAll ("posts/*" .&&. hasVersion "post")
+  templ <- loadBody "templates/post.html"
+  list  <- applyTemplateList templ postCtx posts
+  return list
 
 postItemList :: Compiler String
 postItemList = do
-  posts   <- recentFirst <$> loadAll "posts/*"
+  posts   <- recentFirst <$> loadAll ("posts/*" .&&. hasNoVersion)
   itemTpl <- loadBody "templates/post-item.html"
   list    <- applyTemplateList itemTpl postCtx posts
   return list
@@ -33,6 +38,9 @@ blogConfig :: Configuration
 blogConfig = defaultConfiguration {
     deployCommand = "rsync -av --delete _site/ hearhear.me:html/blog.samplecount.com/"
   }
+
+-- blogRoute = customRoute $ ("blog/"++) . toFilePath
+blogRoute = idRoute
 
 main :: IO ()
 main = hakyllWith blogConfig $ do
@@ -48,23 +56,21 @@ main = hakyllWith blogConfig $ do
     route idRoute
     compile copyFileCompiler
 
-  -- match (fromList ["about.rst", "contact.markdown"]) $ do
-  --     route   $ setExtension "html"
-  --     compile $ pandocCompiler
-  --         >>= loadAndApplyTemplate "templates/default.html" defaultContext
-  --         >>= relativizeUrls
+  match "posts/*" $ version "post" $
+    compile pandocCompiler
 
   match "posts/*" $ do
-    route $ setExtension "html"
-    -- let localCtx = postCtx `mappend` field "postid" (\_ -> concatMap (show.ord) . show <$> getUnderlying)
-    compile $ pandocCompiler
-      >>= loadAndApplyTemplate "templates/post.html" postCtx
-      >>= saveSnapshot "content"
+    route $ blogRoute `composeRoutes` setExtension "html"
+    compile $ do
+          getUnderlying
+      >>= load . setVersion (Just "post")
+      >>= makeItem . itemBody
+      >>= loadAndApplyTemplate "templates/post-page.html" postCtx
       >>= loadAndApplyTemplate "templates/default.html" postCtx
       >>= relativizeUrls
 
   create ["archive/index.html"] $ do
-    route idRoute
+    route blogRoute
     compile $ do
       let archiveCtx =
                field "post-items" (const $ postItemList)
@@ -77,20 +83,25 @@ main = hakyllWith blogConfig $ do
         >>= relativizeUrls
 
   create ["atom.xml"] $ do
-    route idRoute
+    route blogRoute
     compile $ do
       let feedCtx = postCtx `mappend` bodyField "description"
-      posts <- take 10 <$> postList
+      posts <- loadAll ("posts/*" .&&. hasVersion "post")
       renderAtom myFeedConfiguration feedCtx posts
 
   match "index.html" $ do
-      route idRoute
+      route blogRoute
       compile $ do
           -- let indexCtx = field "posts" $ \_ -> postList (take 3 . recentFirst)
-          let indexCtx = field "posts" $ const $ concatMap itemBody . take 10 <$> postList
+          let indexCtx = field "posts" (const $ postList) <> defaultContext
           getResourceBody
               >>= applyAsTemplate indexCtx
-              >>= loadAndApplyTemplate "templates/default.html" postCtx
+              >>= loadAndApplyTemplate "templates/default.html" indexCtx
               >>= relativizeUrls
+
+  -- -- Redirect "/" to "/blog"
+  -- create [".htaccess"] $ do
+  --   route idRoute
+  --   compile $ makeItem "" >>= loadAndApplyTemplate "templates/htaccess" defaultContext
 
   match "templates/*" $ compile templateCompiler
