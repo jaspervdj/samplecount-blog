@@ -15,16 +15,6 @@ myFeedConfiguration = FeedConfiguration
   , feedRoot        = blogRoot
   }
 
-matchPosts template tag =
-  match "posts/*" $ version tag $ do
-    route $ setExtension "html"
-    -- let localCtx = postCtx `mappend` field "postid" (\_ -> concatMap (show.ord) . show <$> getUnderlying)
-    compile $ pandocCompiler
-      >>= loadAndApplyTemplate template postCtx
-      >>= saveSnapshot "content"
-      >>= loadAndApplyTemplate "templates/default.html" postCtx
-      >>= relativizeUrls
-
 postCtx :: Context String
 postCtx =
        dateField "date" "%B %e, %Y"
