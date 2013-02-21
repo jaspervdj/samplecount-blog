@@ -41,8 +41,13 @@ postItemList = do
   list    <- applyTemplateList itemTpl postCtx posts
   return list
 
+blogConfig :: Configuration
+blogConfig = defaultConfiguration {
+    deployCommand = "rsync -av --delete _site/ hearhear.me:html/blog.samplecount.com/"
+  }
+
 main :: IO ()
-main = hakyll $ do
+main = hakyllWith blogConfig $ do
   match "css/*" $ do
     route idRoute
     compile compressCssCompiler
