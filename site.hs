@@ -4,15 +4,13 @@ import           Data.Char
 import           Data.Monoid         ((<>), mappend)
 import           Hakyll
 
-blogRoot = "http://blog.samplecount.com"
-
 myFeedConfiguration :: FeedConfiguration
 myFeedConfiguration = FeedConfiguration
   { feedTitle       = "Samplecount Blog"
-  , feedDescription = "This is the feed for Samplecount's company blog - Posts about sound and programming"
+  , feedDescription = "Posts about sound, programming and sample counts."
   , feedAuthorName  = "Samplecount"
   , feedAuthorEmail = "info@samplecount.com"
-  , feedRoot        = blogRoot
+  , feedRoot        = "http://blog.samplecount.com/blog"
   }
 
 postCtx :: Context String
