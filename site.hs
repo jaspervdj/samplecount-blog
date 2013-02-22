@@ -22,7 +22,7 @@ postCtx =
 
 postList :: Compiler String
 postList = do
-  posts <- recentFirst <$> loadAll ("posts/*" .&&. hasVersion "post")
+  posts <- recentFirst <$> loadAllSnapshots "posts/*" "post"
   templ <- loadBody "templates/post.html"
   list  <- applyTemplateList templ postCtx posts
   return list
@@ -56,15 +56,10 @@ main = hakyllWith blogConfig $ do
     route idRoute
     compile copyFileCompiler
 
-  match "posts/*" $ version "post" $
-    compile pandocCompiler
-
   match "posts/*" $ do
     route $ blogRoute `composeRoutes` setExtension "html"
-    compile $ do
-          getUnderlying
-      >>= load . setVersion (Just "post")
-      >>= makeItem . itemBody
+    compile $ pandocCompiler
+      >>= saveSnapshot "post"
       >>= loadAndApplyTemplate "templates/post-page.html" postCtx
       >>= loadAndApplyTemplate "templates/default.html" postCtx
       >>= relativizeUrls
